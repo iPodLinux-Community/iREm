@@ -30,7 +30,7 @@ void debug(uint16 cm, const char *msg, ...) {
 		vsprintf(buf, msg, va);
 		va_end(va);
 		printf("%s\n", buf);
-		fflush(stdout);
+	//	fflush(stdout);
 	}
 }
 
@@ -40,7 +40,7 @@ void error(const char *msg, ...) {
 	va_start(va, msg);
 	vsprintf(buf, msg, va);
 	va_end(va);
-	fprintf(stderr, "ERROR: %s!\n", buf);
+	//fprintf(stderr, "ERROR: %s!\n", buf);
 	exit(-1);
 }
 
@@ -50,7 +50,7 @@ void warning(const char *msg, ...) {
 	va_start(va, msg);
 	vsprintf(buf, msg, va);
 	va_end(va);
-	fprintf(stderr, "WARNING: %s!\n", buf);
+	//fprintf(stderr, "WARNING: %s!\n", buf);
 }
 
 void string_lower(char *p) {

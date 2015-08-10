@@ -19,6 +19,8 @@
 #ifndef __INTERN_H__
 #define __INTERN_H__
 
+void strtold();
+
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>

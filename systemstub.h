@@ -85,6 +85,8 @@ struct SystemStub {
 	virtual void destroyMutex(void *mutex) = 0;
 	virtual void lockMutex(void *mutex) = 0;
 	virtual void unlockMutex(void *mutex) = 0;
+	
+	pthread_t _sound_thread;
 };
 
 struct MutexStack {
@@ -104,3 +106,9 @@ extern SystemStub *SystemStub_SDL_create();
 extern SystemStub *SystemStub_Win32_create();
 
 #endif // __SYSTEMSTUB_H__
+
+typedef struct {
+	SystemStub::AudioCallback sound_callback;
+	void *param;
+} THREAD_PARAM;
+

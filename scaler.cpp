@@ -35,7 +35,28 @@ void point1x(uint16 *dst, uint16 dstPitch, const uint16 *src, uint16 srcPitch, u
 		src += srcPitch;
 	}
 }
-
+/*
+// Scaler function which scales by 0.5
+void Scaleo5x(const uint8 *srcPtr, uint32 srcPitch, uint8 *dstPtr, uint32 dstPitch, int width, int height) {
+      dstPitch >>= 1; srcPitch >>= 1;
+      const int tgtHeight = height >> 1;
+      const int tgtWidth = width >> 1;
+      uint16 dstColor;
+      for(int i=0;i<tgtHeight; i++) {
+              uint16 *srcRow = (uint16*)srcPtr + (i << 1)*srcPitch;
+              uint16 *srcRow2 = (uint16*)srcPtr + ((i << 1)+1)*srcPitch;
+              uint16 *dstRow = (uint16*)dstPtr + i*dstPitch;
+              for(int j=0;j<tgtWidth; j++) {
+                      int srcx = j << 1;
+                      dstColor = (*(srcRow + srcx) & 0xE79C) >> 2;
+                      dstColor += (*(srcRow + srcx+1) & 0xE79C) >> 2;
+                      dstColor += (*(srcRow2 + srcx) & 0xE79C) >> 2;
+                      dstColor += (*(srcRow + srcx+1) & 0xE79C) >> 2;
+                      *(dstRow + j) = dstColor;
+              }
+      }
+}
+*/
 void point2x(uint16 *dst, uint16 dstPitch, const uint16 *src, uint16 srcPitch, uint16 w, uint16 h) {
 	dstPitch >>= 1;
 	while (h--) {

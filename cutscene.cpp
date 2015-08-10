@@ -949,8 +949,9 @@ void Cutscene::mainLoop(uint16 offset) {
 		}
 		(this->*_opcodeTable[op])();
 		_stub->processEvents();
-		if (_stub->_pi.backspace) {
+		if ( (_stub->_pi.backspace) ||  (_stub->_pi.shift) ) {
 			_stub->_pi.backspace = false;
+			_stub->_pi.shift = false;
 			_interrupted = true;
 		}
 	}
@@ -960,7 +961,7 @@ void Cutscene::mainLoop(uint16 offset) {
 }
 
 void Cutscene::load(uint16 cutName) {
-	assert(cutName != 0xFFFF);
+	////assert(cutName != 0xFFFF);
 	const char *name = _namesTable[cutName & 0xFF];
 	_res->load(name, Resource::OT_CMD);
 	_res->load(name, Resource::OT_POL);

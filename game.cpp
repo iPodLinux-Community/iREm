@@ -185,6 +185,7 @@ void Game::mainLoop() {
 		}
 		if (_stub->_pi.escape) {
 			_stub->_pi.escape = false;
+			_stub->_pi.backspace = false;
 			if (handleConfigPanel()) {
 				break;
 			}
@@ -387,8 +388,11 @@ bool Game::handleConfigPanel() {
 		if (prev != current) {
 			SWAP(colors[prev], colors[current]);
 		}
-		if (_stub->_pi.enter) {
+		if ( (_stub->_pi.enter) || (_stub->_pi.shift) ){
+			_stub->_pi.shift = false;
 			_stub->_pi.enter = false;
+			_stub->_pi.escape = false;
+			
 			switch (current) {
 			case MENU_ITEM_LOAD:
 				_stub->_pi.load = true;
@@ -441,7 +445,8 @@ bool Game::handleContinueAbort() {
 				++current_color;
 			}
 		}
-		if (_stub->_pi.enter) {
+		if ( (_stub->_pi.enter) || (_stub->_pi.shift) ){
+			_stub->_pi.shift = false;
 			_stub->_pi.enter = false;
 			return (current_color == 0);
 		}
@@ -1246,7 +1251,7 @@ void Game::handleInventory() {
 		int num_lines = (num_items - 1) / 4 + 1;
 		int current_line = 0;
 		bool display_score = false;
-		while (!_stub->_pi.backspace && !_stub->_pi.quit) {
+		while (!_stub->_pi.shift && !_stub->_pi.quit) {
 			// draw inventory background
 			int icon_h = 5;
 			int icon_y = 140;
@@ -1290,12 +1295,26 @@ void Game::handleInventory() {
 				if (current_line != num_lines - 1) {
 					drawIcon(0x4D, 120, 143, 0xA); // up arrow
 				}
+				
+				if (  (_stub->_pi.backspace) ){
+					_stub->_pi.backspace = false;
+					display_score = !display_score;
+				}
+					
+				
+			
 			} else {
 				char textBuf[50];
 				sprintf(textBuf, "SCORE %08lu", _score);
 				_vid.drawString(textBuf, (114 - strlen(textBuf) * 8) / 2 + 72, 158, 0xE5);
 				sprintf(textBuf, "%s:%s", _res.getMenuString(LocaleData::LI_06_LEVEL), _res.getMenuString(LocaleData::LI_13_EASY + _skillLevel));
 				_vid.drawString(textBuf, (114 - strlen(textBuf) * 8) / 2 + 72, 166, 0xE5);
+				
+				if (  (_stub->_pi.backspace) ){
+					_stub->_pi.backspace = false;
+					display_score = !display_score;
+				}
+				
 			}
 
 			_vid.updateScreen();
@@ -1334,13 +1353,17 @@ void Game::handleInventory() {
 					}
 				}
 			}
-			if (_stub->_pi.enter) {
-				_stub->_pi.enter = false;
-				display_score = !display_score;
-			}
+			
+			
+		}
+		if ( (_stub->_pi.shift)  ){
+			_stub->_pi.shift = false;
+			if(display_score)
+				_stub->_pi.escape = true;
 		}
 		_vid.fullRefresh();
 		_stub->_pi.backspace = false;
+		
 		if (selected_pge) {
 			pge_setCurrentInventoryObject(selected_pge);
 		}

@@ -463,7 +463,7 @@ void Resource::load_MBK(File *f) {
 		_mbk[i].offset = f->readUint16BE() - num * 6;
 		_mbk[i].len = f->readUint16BE();
 		debug(DBG_RES, "dataSize=0x%X entry %d off=0x%X len=0x%X", dataSize, i, _mbk[i].offset + num * 6, _mbk[i].len);
-		assert(_mbk[i].offset <= dataSize);
+		//assert(_mbk[i].offset <= dataSize);
 	}
 	_mbkData = (uint8 *)malloc(dataSize);
 	if (!_mbkData) {
@@ -547,7 +547,7 @@ void Resource::load_OBJ(File *f) {
 	uint16 i;
 
 	_numObjectNodes = f->readUint16LE();
-	assert(_numObjectNodes < 255);
+	//assert(_numObjectNodes < 255);
 
 	uint32 offsets[256];
 	for (i = 0; i < _numObjectNodes; ++i) {

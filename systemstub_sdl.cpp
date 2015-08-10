@@ -20,11 +20,33 @@
 #include "scaler.h"
 #include "systemstub.h"
 
+#include <assert.h>
+
+#include <sys/time.h>
+
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
+#include <sys/ioctl.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <sys/soundcard.h>
+
+#include <sched.h>
+#include <pthread.h>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+
+#define SAMPLES_PER_SEC 32000
 
 struct SystemStub_SDL : SystemStub {
 	enum {
 		MAX_BLIT_RECTS = 200,
-		SOUND_SAMPLE_RATE = 11025,
+		SOUND_SAMPLE_RATE = 65536,
 		JOYSTICK_COMMIT_VALUE = 3200
 	};
 
@@ -73,7 +95,7 @@ SystemStub *SystemStub_SDL_create() {
 }
 
 void SystemStub_SDL::init(const char *title, uint16 w, uint16 h) {
-	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK);
+	SDL_Init(SDL_INIT_VIDEO);
 	SDL_ShowCursor(SDL_DISABLE);
 	SDL_WM_SetCaption(title, NULL);
 	memset(&_pi, 0, sizeof(_pi));
@@ -87,20 +109,24 @@ void SystemStub_SDL::init(const char *title, uint16 w, uint16 h) {
 	}
 	memset(_offscreen, 0, size_offscreen);
 	_fullscreen = false;
-	_scaler = 2;
+	_scaler = 0;
 	memset(_pal, 0, sizeof(_pal));
 	prepareGfxMode();
 	_joystick = NULL;
+	/*
 	if (SDL_NumJoysticks() > 0) {
 		_joystick = SDL_JoystickOpen(0);
 	}
+	*/
 }
 
 void SystemStub_SDL::destroy() {
 	cleanupGfxMode();
+	/*
 	if (SDL_JoystickOpened(0)) {
 		SDL_JoystickClose(_joystick);
 	}
+	*/
 	SDL_Quit();
 }
 
@@ -243,203 +269,96 @@ void SystemStub_SDL::updateScreen(uint8 shakeOffset) {
 	_numBlitRects = 0;
 }
 
+static int rotate_modulation= 0;
+
 void SystemStub_SDL::processEvents() {
+	
+	if ( (rotate_modulation> -15) &&  (rotate_modulation <15)  )
+	{
+		_pi.enter = false;
+		_pi.space = false;
+		rotate_modulation = 0;
+	}
+	
 	SDL_Event ev;
 	while (SDL_PollEvent(&ev)) {
 		switch (ev.type) {
 		case SDL_QUIT:
 			_pi.quit = true;
 			break;
-		case SDL_JOYHATMOTION:
-			_pi.dirMask = 0;
-			if (ev.jhat.value & SDL_HAT_UP) {
-				_pi.dirMask |= PlayerInput::DIR_UP;
-			}
-			if (ev.jhat.value & SDL_HAT_DOWN) {
-				_pi.dirMask |= PlayerInput::DIR_DOWN;
-			}
-			if (ev.jhat.value & SDL_HAT_LEFT) {
-				_pi.dirMask |= PlayerInput::DIR_LEFT;
-			}
-			if (ev.jhat.value & SDL_HAT_RIGHT) {
-				_pi.dirMask |= PlayerInput::DIR_RIGHT;
-			}
-			break;
-		case SDL_JOYAXISMOTION:
-			switch (ev.jaxis.axis) {
-			case 0:
-				if (ev.jaxis.value > JOYSTICK_COMMIT_VALUE) {
-					_pi.dirMask |= PlayerInput::DIR_RIGHT;
-					if (_pi.dirMask & PlayerInput::DIR_LEFT) {
-						_pi.dirMask &= ~PlayerInput::DIR_LEFT;
-					}
-				} else if (ev.jaxis.value < -JOYSTICK_COMMIT_VALUE) {
-					_pi.dirMask |= PlayerInput::DIR_LEFT;
-					if (_pi.dirMask & PlayerInput::DIR_RIGHT) {
-						_pi.dirMask &= ~PlayerInput::DIR_RIGHT;
-					}
-				} else {
-					_pi.dirMask &= ~(PlayerInput::DIR_RIGHT | PlayerInput::DIR_LEFT);
-				}
-				break;
-			case 1:
-				if (ev.jaxis.value > JOYSTICK_COMMIT_VALUE) {
-					_pi.dirMask |= PlayerInput::DIR_DOWN;
-					if (_pi.dirMask & PlayerInput::DIR_UP) {
-						_pi.dirMask &= ~PlayerInput::DIR_UP;
-					}
-				} else if (ev.jaxis.value < -JOYSTICK_COMMIT_VALUE) {
-					_pi.dirMask |= PlayerInput::DIR_UP;
-					if (_pi.dirMask & PlayerInput::DIR_DOWN) {
-						_pi.dirMask &= ~PlayerInput::DIR_DOWN;
-					}
-				} else {
-					_pi.dirMask = 0;
-				}
-				break;
-			}
-			break;
-		case SDL_JOYBUTTONDOWN:
-			switch (ev.jbutton.button) {
-			case 0:
-				_pi.space = true;
-				break;
-			case 1:
-			    _pi.shift = true;
-			    break;
-			case 2:
-			    _pi.enter = true;
-			    break;
-			case 3:
-			    _pi.backspace = true;
-			    break;
-			}
-			break;
-		case SDL_JOYBUTTONUP:
-			switch (ev.jbutton.button) {
-			case 0:
-				_pi.space = false;
-				break;
-			case 1:
-			    _pi.shift = false;
-			    break;
-			case 2:
-			    _pi.enter = false;
-			    break;
-			case 3:
-			    _pi.backspace = false;
-			    break;
-			}
-			break;
 		case SDL_KEYUP:
 			switch (ev.key.keysym.sym) {
-			case SDLK_LEFT:
+			case SDLK_w:
 				_pi.dirMask &= ~PlayerInput::DIR_LEFT;
 				break;
-			case SDLK_RIGHT:
+			case SDLK_f:
 				_pi.dirMask &= ~PlayerInput::DIR_RIGHT;
 				break;
-			case SDLK_UP:
+			case SDLK_m:
 				_pi.dirMask &= ~PlayerInput::DIR_UP;
 				break;
-			case SDLK_DOWN:
+			case SDLK_d:
 				_pi.dirMask &= ~PlayerInput::DIR_DOWN;
 				break;
-			case SDLK_SPACE:
-				_pi.space = false;
-				break;
-			case SDLK_RSHIFT:
-			case SDLK_LSHIFT:
-				_pi.shift = false;
-				break;
 			case SDLK_RETURN:
-				_pi.enter = false;
-				break;
-			case SDLK_ESCAPE:
-				_pi.escape = false;
+				_pi.shift = false;
 				break;
 			default:
 				break;
 			}
 			break;
 		case SDL_KEYDOWN:
-			if (ev.key.keysym.mod & KMOD_ALT) {
-				if (ev.key.keysym.sym == SDLK_RETURN) {
-					switchGfxMode(!_fullscreen, _scaler);
-				} else if (ev.key.keysym.sym == SDLK_KP_PLUS) {
-					uint8 s = _scaler + 1;
-					if (s < NUM_SCALERS) {
-						switchGfxMode(_fullscreen, s);
-					}
-				} else if (ev.key.keysym.sym == SDLK_KP_MINUS) {
-					int8 s = _scaler - 1;
-					if (_scaler > 0) {
-						switchGfxMode(_fullscreen, s);
-					}
-				}
-				break;
-			} else if (ev.key.keysym.mod & KMOD_CTRL) {
-				if (ev.key.keysym.sym == SDLK_f) {
-					_pi.dbgMask ^= PlayerInput::DF_FASTMODE;
-				} else if (ev.key.keysym.sym == SDLK_b) {
-					_pi.dbgMask ^= PlayerInput::DF_DBLOCKS;
-				} else if (ev.key.keysym.sym == SDLK_i) {
-					_pi.dbgMask ^= PlayerInput::DF_SETLIFE;
-				} else if (ev.key.keysym.sym == SDLK_m) {
-					_pi.mirrorMode = !_pi.mirrorMode;
-					flipGfx();
-				} else if (ev.key.keysym.sym == SDLK_s) {
-					_pi.save = true;
-				} else if (ev.key.keysym.sym == SDLK_l) {
-					_pi.load = true;
-				} else if (ev.key.keysym.sym == SDLK_KP_PLUS) {
-					_pi.stateSlot = 1;
-				} else if (ev.key.keysym.sym == SDLK_KP_MINUS) {
-					_pi.stateSlot = -1;
-				} else if (ev.key.keysym.sym == SDLK_r) {
-					_pi.inpRecord = true;
-				} else if (ev.key.keysym.sym == SDLK_p) {
-					_pi.inpReplay = true;
-				}
-			}
 			_pi.lastChar = ev.key.keysym.sym;
 			switch (ev.key.keysym.sym) {
-			case SDLK_LEFT:
+			case SDLK_w:
 				_pi.dirMask |= PlayerInput::DIR_LEFT;
+				rotate_modulation = 0;
 				break;
-			case SDLK_RIGHT:
+			case SDLK_f:
 				_pi.dirMask |= PlayerInput::DIR_RIGHT;
+				rotate_modulation = 0;
 				break;
-			case SDLK_UP:
+			case SDLK_m:
 				_pi.dirMask |= PlayerInput::DIR_UP;
+				rotate_modulation = 0;
 				break;
-			case SDLK_DOWN:
+			case SDLK_d:
 				_pi.dirMask |= PlayerInput::DIR_DOWN;
+				rotate_modulation = 0;
 				break;
-			case SDLK_BACKSPACE:
-			case SDLK_TAB:
+			case SDLK_h:
+				rotate_modulation = 0;
 				_pi.backspace = true;
 				break;
-			case SDLK_SPACE:
+			case SDLK_l:
+				rotate_modulation -= 1;
+				if(rotate_modulation <= -15) {
+				rotate_modulation = 0;
+				// Strafe left
 				_pi.space = true;
+				}
 				break;
-			case SDLK_RSHIFT:
-			case SDLK_LSHIFT:
-				_pi.shift = true;
+			case SDLK_r:
+				rotate_modulation += 1;
+				if(rotate_modulation >= 15) {
+				rotate_modulation = 0;
+				// Strafe r
+				_pi.enter = true;
+				}
 				break;
 			case SDLK_RETURN:
-				_pi.enter = true;
-				break;
-			case SDLK_ESCAPE:
-				_pi.escape = true;
+				rotate_modulation = 0;
+				_pi.shift = true;
 				break;
 			default:
 				break;
 			}
 			break;
 		default:
-			break;
+		break;
 		}
+		
+		
 	}
 }
 
@@ -451,7 +370,98 @@ uint32 SystemStub_SDL::getTimeStamp() {
 	return SDL_GetTicks();
 }
 
+#define FRAG_SIZE 128
+
+int sound_fd, ipod_mixer, paramz, frag_sizez;
+uint8 sound_buffer[FRAG_SIZE];
+
+bool AudioInit = true;
+
+static void *sound_and_music_thread(void *params) {
+	/* Init sound */
+	
+	SystemStub::AudioCallback sound_proc = ((THREAD_PARAM *)params)->sound_callback;
+	void *proc_param = ((THREAD_PARAM *)params)->param;
+
+	//audio_buf_info info;
+	
+	if(AudioInit)
+	{
+
+		sound_fd = open("/dev/dsp", O_WRONLY);
+		
+
+		if (sound_fd < 0) {
+			warning("Error opening sound device!\n");
+			return NULL;
+		}
+		
+		int sound_frag = 0x7fff0004;
+	      if (ioctl(sound_fd, SNDCTL_DSP_SETFRAGMENT, &sound_frag) != 0) {
+		 warning("Error in the SNDCTL_DSP_SETFRAGMENT ioctl!\n");
+		 return NULL;
+	      }
+	
+		paramz = AFMT_S8;
+		//paramz = AFMT_S16_NE;
+		if (ioctl(sound_fd, SNDCTL_DSP_SETFMT, &paramz) == -1) {
+			warning("Error in the SNDCTL_DSP_SETFMT ioctl!\n");
+			return NULL;;
+		}
+
+		paramz = 1;
+		if (ioctl(sound_fd, SNDCTL_DSP_CHANNELS, &paramz) == -1) {
+			warning("Error in the SNDCTL_DSP_CHANNELS ioctl!\n");
+			return NULL;
+		}
+
+		paramz = SAMPLES_PER_SEC;
+		if (ioctl(sound_fd, SNDCTL_DSP_SPEED, &paramz) == -1) {
+			warning("Error in the SNDCTL_DSP_SPEED ioctl!\n");
+			return NULL;
+		}
+		
+		
+		ipod_mixer = open("/dev/mixer", O_RDWR);
+		if (ipod_mixer  < 0) {
+			warning("Error opening MIXER device!\n");
+			return NULL;
+		}
+		
+		int ipod_volume = 30;
+		ioctl(ipod_mixer, SOUND_MIXER_WRITE_PCM, &ipod_volume);
+		AudioInit = false;
+		
+	}
+/*
+	if (ioctl(sound_fd, SNDCTL_DSP_GETOSPACE, &info) != 0) {
+		printf("SNDCTL_DSP_GETOSPACE");
+		return NULL;
+	}
+*/	
+	sched_yield();
+	while (1) {
+		uint8 *bufz = (uint8 *)sound_buffer;
+		int size, written;
+
+		sound_proc(proc_param, (uint8 *)sound_buffer, FRAG_SIZE);
+
+		size = FRAG_SIZE;
+		while (size > 0) {
+			written = write(sound_fd, bufz, size);
+			bufz += written;
+			size -= written;
+		}
+	}
+
+	return NULL;
+}
+
+
+
 void SystemStub_SDL::startAudio(AudioCallback callback, void *param) {
+
+	/*
 	SDL_AudioSpec desired;
 	memset(&desired, 0, sizeof(desired));
 	desired.freq = SOUND_SAMPLE_RATE;
@@ -465,10 +475,22 @@ void SystemStub_SDL::startAudio(AudioCallback callback, void *param) {
 	} else {
 		error("SystemStub_SDL::startAudio() Unable to open sound device");
 	}
+
+	*/
+	static THREAD_PARAM thread_param;
+	
+	// And finally start the music thread 
+	thread_param.param = param;
+	thread_param.sound_callback = callback;
+
+	pthread_create(&_sound_thread, NULL, sound_and_music_thread, (void *)&thread_param);
+
 }
 
 void SystemStub_SDL::stopAudio() {
-	SDL_CloseAudio();
+	//SDL_CloseAudio();
+	close(sound_fd);
+	close(ipod_mixer);
 }
 
 uint32 SystemStub_SDL::getOutputSampleRate() {
